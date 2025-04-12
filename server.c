@@ -227,7 +227,7 @@ int main(int argc, char* argv[]) {
 		size_t read_chunk = fread(payload, 1, payload_size, file);
 		if (read_chunk == 0) break;
 		
-		send_st_t send_st = send_func(channel_socket, payload, (size_t*)HEADER_SIZE + read_chunk, seq_num, slot_time, timeout, chan_addr);
+		send_st_t send_st = send_func(channel_socket, payload, (size_t*)HEADER_SIZE + read_chunk, seq_num, slot_time, timeout, &chan_addr);
 
 		if (!send_st.success) {
 			success = 0;

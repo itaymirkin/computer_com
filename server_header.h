@@ -2,6 +2,8 @@
 #define PROTOCOL_H
 
 #include <stdint.h>
+#define MAX_CLIENTS 256
+#define MAX_FRAME_SIZE 1500
 
 
 // Packet types
@@ -17,6 +19,16 @@ typedef struct {
     uint16_t src_port;   // Sender's port
     uint16_t length;     // Payload length
 } packet_header_t;
+
+
+typedef struct {
+
+    char src_ip[20];       // Sender's IP in network byte order
+    uint16_t src_port;     // Sender's port
+    uint32_t sent;         // Number of frames sent
+    uint32_t collisions;   // Number of collisions
+} channel_stats_t;
+
 
 #define HEADER_SIZE sizeof(packet_header_t)
 
