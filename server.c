@@ -1,9 +1,11 @@
+#include <winsock2.h>
+#include <Windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "winsock2.h"
-
+#include <time.h>
 #include "server_header.h"
+#pragma comment(lib, "Ws2_32.lib")
 #define MAX_CLIENTS 256
 
 // Global variables to track statistics
@@ -49,8 +51,8 @@ send_st_t send_func(int socket, const void* data, size_t frame_size, int seq_num
 	//cp data for rest of packet
 	memcpy(packet + HEADER_SIZE, data, frame_size - HEADER_SIZE);
 
-	struct timeval start_time, end_time;
-	gettimeofday(&start_time, NULL);
+	LARGE_INTEGER start_time, end_time;
+	QueryPerformanceCounter(&start_time);
 
 	while (nof_failures < max_attempts) {
 		//try_sending
@@ -82,7 +84,7 @@ send_st_t send_func(int socket, const void* data, size_t frame_size, int seq_num
 		else if (select_resp == 0){
 			nof_failures++;
 			
-			usleep(1000 * rand() % (1 << nof_failures) * slot_time); //exp backoff
+			Sleep(1000 * rand() % (1 << nof_failures) * slot_time); //exp backoff
 			continue;
 			
 		}
@@ -103,7 +105,7 @@ send_st_t send_func(int socket, const void* data, size_t frame_size, int seq_num
 		}
 		else if (recv_len < HEADER_SIZE) {  // Incomplete transmission
 			nof_failures++;
-			usleep(1000 * rand() % (1 << nof_failures) * slot_time); // Exponential backoff
+			Sleep(1000 * rand() % (1 << nof_failures) * slot_time); // Exponential backoff
 			continue;
 		}
 
@@ -111,10 +113,10 @@ send_st_t send_func(int socket, const void* data, size_t frame_size, int seq_num
 
 		//check for errors in 
 
-		if (recv_header == PACKET_TYPE_NOISE)
+		if (recv_header->type == PACKET_TYPE_NOISE)
 		{
 			nof_failures++;
-			usleep(1000 * rand() % (1 << nof_failures) * slot_time); // Exponential backoff
+			Sleep(1000 * rand() % (1 << nof_failures) * slot_time); // Exponential backoff
 			continue;
 		}
 
@@ -125,13 +127,13 @@ send_st_t send_func(int socket, const void* data, size_t frame_size, int seq_num
 			recv_header->src_ip == chan_addr->sin_addr.s_addr &&
 			recv_header->src_port == chan_addr->sin_port) {
 			// Success
-			gettimeofday(&end_time, NULL);
+			QueryPerformanceCounter(&end_time);
 			status.success = 1;
 			return status;
 		}
 		else {
 			nof_failures++;
-			usleep(1000 * rand() % (1 << nof_failures) * slot_time); // Exponential backoff
+			Sleep(1000 * rand() % (1 << nof_failures) * slot_time); // Exponential backoff
 			continue;
 
 		}
@@ -146,7 +148,7 @@ send_st_t send_func(int socket, const void* data, size_t frame_size, int seq_num
 int main(int argc, char* argv[]) {
 
 	//Check number of params
-	if (argc != 0) {
+	if (argc != 8) {
 		fprintf(stderr, "Not enough parametes - need 8");
 		return 1;
 	}
@@ -172,6 +174,11 @@ int main(int argc, char* argv[]) {
 	rewind(file);
 
 
+	WSADATA wsaData;
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+		fprintf(stderr, "WSAStartup failed.\n");
+		return 1;
+	}
 	
 	// Create socket
 	int channel_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -181,22 +188,23 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
+
 	struct sockaddr_in chan_addr;
 	memset(&chan_addr, 0, sizeof(chan_addr));
 	chan_addr.sin_family = AF_INET;
 	chan_addr.sin_port = htons(chan_port);
 
 	if (inet_pton(AF_INET, chan_ip, &chan_addr.sin_addr) <= 0) {
-		perror("inet_pton");
-		close(channel_socket);
-		fclose(file);
+		perror("inet_pton failed");
 		return 1;
 	}
+
+	
 
 	// Connect to channel
 	if (connect(channel_socket, (struct sockaddr*)&chan_addr, sizeof(chan_addr)) < 0) {
 		perror("connect");
-		close(channel_socket);
+		closesocket(channel_socket);
 		fclose(file);
 		return 1;
 	}
@@ -206,16 +214,17 @@ int main(int argc, char* argv[]) {
 
 	//data transfering
 
-	char* payload = malloc(payload_size);
+	char* payload = (char*) malloc(payload_size);
 	if (!payload) {
 		perror("malloc");
-		close(channel_socket);
+		closesocket(channel_socket);
 		fclose(file);
 		return 1;
 	}
 	//time start of the packet
-	struct timeval start_time, end_time;
-	gettimeofday(&start_time, NULL);
+	LARGE_INTEGER start_time, end_time, freq;
+	QueryPerformanceFrequency(&freq);
+	QueryPerformanceCounter(&start_time);
 
 	
 
@@ -227,7 +236,7 @@ int main(int argc, char* argv[]) {
 		size_t read_chunk = fread(payload, 1, payload_size, file);
 		if (read_chunk == 0) break;
 		
-		send_st_t send_st = send_func(channel_socket, payload, (size_t*)HEADER_SIZE + read_chunk, seq_num, slot_time, timeout, &chan_addr);
+		send_st_t send_st = send_func(channel_socket, payload, HEADER_SIZE + read_chunk, seq_num, slot_time, timeout, &chan_addr);
 
 		if (!send_st.success) {
 			success = 0;
@@ -243,10 +252,10 @@ int main(int argc, char* argv[]) {
 		
 
 	}
-	gettimeofday(&end_time, NULL);
+	QueryPerformanceCounter(&end_time);
 
 	//Calc time in ms
-	total_time_ms = (end_time.tv_sec - start_time.tv_sec) * 1000;
+	double total_time_ms = (double)(end_time.QuadPart - start_time.QuadPart) * 1000.0 / freq.QuadPart;
 
 	//Calc BandWidth
 	double bandwidth = 0;
@@ -272,7 +281,7 @@ int main(int argc, char* argv[]) {
 
 	// Clean up
 	free(payload);
-	close(channel_socket);
+	closesocket(channel_socket);
 	fclose(file);
 
 	return 0;
