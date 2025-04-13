@@ -1,9 +1,11 @@
+#include <winsock2.h>
+#include <Windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "winsock2.h"
-
+#include <time.h>
 #include "server_header.h"
+#pragma comment(lib, "Ws2_32.lib")
 
 int send_to_all_sockets(fd_set* sock_set, char* packet, int frame_size) {
 	for (int i = 1; i < sock_set->fd_count; i++) {
@@ -24,8 +26,8 @@ int send_to_all_sockets(fd_set* sock_set, char* packet, int frame_size) {
 int main(int argc, char* argv[]) {
 
 	//Check number of params
-	if (argc != 0) {
-		fprintf(stderr, "Not enough parameters - need 8");
+	if (argc != 3) {
+		fprintf(stderr, "Not enough parameters - need 3");
 		return 1;
 	}
 
@@ -184,8 +186,9 @@ int main(int argc, char* argv[]) {
 	// Print Statistics
 	for (int i = 0; i < MAX_CLIENTS; i++) {
 		if (clients_statistics[i].sent > 0) {
-			stdrerr("From %s, Port: %d: %d frames, %d collisions\n",
-				clients_statistics[i].src_ip, clients_statistics[i].src_port, clients_statistics[i].sent, clients_statistics[i].collisions);
+			fprintf(stderr, "From %s, Port: %d: %d frames, %d collisions\n",
+				clients_statistics[i].src_ip, clients_statistics[i].src_port,
+				clients_statistics[i].sent, clients_statistics[i].collisions);
 		}
 	}
 
