@@ -272,6 +272,8 @@ int main(int argc, char* argv[]) {
         avg_transmissions = (double)total_transmissions / total_frames;
     }
 
+
+
     fprintf(stderr, "Transmissions/frame: average %.2f, maximum %d\n",
         avg_transmissions, max_transmissions);
     fprintf(stderr, "Average bandwidth: %.3f Mbps\n", bandwidth);
