@@ -5,7 +5,10 @@
 #include <string.h>
 #include <time.h>
 #include "server_header.h"
+#include <signal.h>
 #pragma comment(lib, "Ws2_32.lib")
+
+int running = 1;
 
 int send_to_all_sockets(fd_set* sock_set, char* packet, int frame_size) {
     for (int i = 1; i < sock_set->fd_count; i++) {
@@ -18,6 +21,10 @@ int send_to_all_sockets(fd_set* sock_set, char* packet, int frame_size) {
     return 0;
 }
 
+void handle_sigint(int sig) {
+	printf("\nKeyboard interrupt has been detected, starting cleaning sequence\n");
+	running = 0;
+}
 int main(int argc, char* argv[]) {
     printf("Server starting...\n");
 
@@ -56,6 +63,8 @@ int main(int argc, char* argv[]) {
 
     channel_stats_t clients_statistics[MAX_CLIENTS] = { 0 };
 
+    signal(SIGINT, handle_sigint);
+
     // Create Socket 
     SOCKET listen_sock = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_sock == INVALID_SOCKET) {
@@ -89,8 +98,7 @@ int main(int argc, char* argv[]) {
     printf("Listening for incoming connections...\n");
 
     
-    while (1) {
-
+    while (running) {
 
         server_is_sending = 0;
         conflict = 0;
@@ -147,13 +155,12 @@ int main(int argc, char* argv[]) {
             packet_header_t packet = { 0 };
             packet.type = PACKET_TYPE_NOISE;
 
-            if (send_to_all_sockets(&sock_set, (char*)&packet, HEADER_SIZE) < 0) {
-                printf("Failed to send noise packet\n");
-                
+            while (send_to_all_sockets(&sock_set, (char*)&packet, HEADER_SIZE) < 0) {
+                printf("Failed to send noise packet - Trying again\n");       
             }
-            else {
-                printf("Conflict detected, noise packet sent.\n");
-            }
+            
+            printf("Conflict detected, noise packet sent.\n");
+            
         }
         else if (server_is_sending) {
             char packet[MAX_FRAME_SIZE];
@@ -183,8 +190,8 @@ int main(int argc, char* argv[]) {
                 packet_header_t noise_packet = { 0 };
                 noise_packet.type = PACKET_TYPE_NOISE;
 
-                if (send_to_all_sockets(&sock_set, (char*)&noise_packet, HEADER_SIZE) < 0) {
-                    printf("Failed to send noise packet for incomplete transmission\n");
+                while (send_to_all_sockets(&sock_set, (char*)&noise_packet, HEADER_SIZE) < 0) {
+                    printf("Failed to send noise packet for incomplete transmission - Trying again\n");
                 }
                 continue;
             }
@@ -205,13 +212,13 @@ int main(int argc, char* argv[]) {
                 packet_size, sending_id, clients_statistics[sending_id].src_ip,
                 clients_statistics[sending_id].src_port);
 
-            if (send_to_all_sockets(&sock_set, packet, packet_size) < 0) {
-                printf("Failed to forward packet to all clients\n");
+            while (send_to_all_sockets(&sock_set, packet, packet_size) < 0) {
+                printf("Failed to forward packet to all clients - Trying again\n");
                 // Just continue, don't break the loop
             }
-            else {
-                printf("Packet successfully forwarded to all clients\n");
-            }
+
+            printf("Packet successfully forwarded to all clients\n");
+
         }
     }
 
@@ -239,7 +246,7 @@ int main(int argc, char* argv[]) {
     printf("========================================\n");
 
     WSACleanup();
-    printf("Server shutting down...\n");
+    printf("\n Channel shutting down...\n");
 
     return 0;
 }
