@@ -42,6 +42,7 @@ send_st_t send_func(int socket, const void* data, size_t frame_size, int seq_num
     header->src_ip = chan_addr->sin_addr.s_addr;
     header->src_port = chan_addr->sin_port;
     header->length = htons((uint16_t)(frame_size - HEADER_SIZE));
+    header->MAC = rand() % 256; // Random MAC for demonstration
     printf("Header created successfully.\n");
     //cp data for rest of packet
     memcpy(packet + HEADER_SIZE, data, frame_size - HEADER_SIZE);
@@ -82,7 +83,9 @@ send_st_t send_func(int socket, const void* data, size_t frame_size, int seq_num
         else if (select_resp == 0) {
             nof_failures++;
             OutputDebugString("Timeout occurred\n");
-            Sleep(rand() % (1 << nof_failures) * slot_time); //exp backoff
+            int sleep_time = rand() % (1 << nof_failures) * slot_time;
+            printf("Timeout, sleeping for %d ms\n", sleep_time);
+            Sleep(sleep_time); //exp backoff
             continue;
         }
 
@@ -102,7 +105,9 @@ send_st_t send_func(int socket, const void* data, size_t frame_size, int seq_num
         else if (recv_len < HEADER_SIZE) {  // Incomplete transmission
             nof_failures++;
             OutputDebugString("Incomplete transmission\n");
-            Sleep(rand() % (1 << nof_failures) * slot_time); // Exponential backoff
+            int sleep_time = rand() % (1 << nof_failures) * slot_time;
+            printf("Timeout, sleeping for %d ms\n", sleep_time);
+            Sleep(sleep_time); //exp backoff
             continue;
         }
 
@@ -111,8 +116,10 @@ send_st_t send_func(int socket, const void* data, size_t frame_size, int seq_num
         //check for errors in
         if (recv_header->type == PACKET_TYPE_NOISE) {
             nof_failures++;
-            OutputDebugString("Received noise packet\n");
-            Sleep(rand() % (1 << nof_failures) * slot_time); // Exponential backoff
+            printf("Received noise packet\n");
+            int sleep_time = rand() % (1 << nof_failures) * slot_time;
+            printf("Timeout, sleeping for %d ms\n", sleep_time);
+            Sleep(sleep_time); //exp backoff
             continue;
         }
 
@@ -120,7 +127,8 @@ send_st_t send_func(int socket, const void* data, size_t frame_size, int seq_num
         if (recv_header->type == PACKET_TYPE_DATA &&
             ntohl(recv_header->seq_num) == seq_num &&
             recv_header->src_ip == chan_addr->sin_addr.s_addr &&
-            recv_header->src_port == chan_addr->sin_port) {
+            recv_header->src_port == chan_addr->sin_port
+            ) {
             // Success
             QueryPerformanceCounter(&end_time);
             status.success = 1;
@@ -129,8 +137,11 @@ send_st_t send_func(int socket, const void* data, size_t frame_size, int seq_num
         }
         else {
             nof_failures++;
-            OutputDebugString("Received incorrect packet\n");
-            Sleep(rand() % (1 << nof_failures) * slot_time); // Exponential backoff
+            
+            printf("Received incorrect packet\n");
+            int sleep_time = rand() % (1 << nof_failures) * slot_time;
+            printf("Timeout, sleeping for %d ms\n", sleep_time);
+            Sleep(sleep_time); //exp backoff
             continue;
         }
     }
@@ -234,6 +245,7 @@ int main(int argc, char* argv[]) {
     while (!feof(file)) {
         printf("Sending frame %d\n", seq_num);
         size_t read_chunk = fread(payload, 1, payload_size, file);
+        printf("Read chunk conrtains: %s\n", payload);
         if (read_chunk == 0) break;
 
         send_st_t send_st = send_func(channel_socket, payload, HEADER_SIZE + read_chunk, seq_num, slot_time, timeout, &chan_addr);

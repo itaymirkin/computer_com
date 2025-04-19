@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #define MAX_CLIENTS 256
-#define MAX_FRAME_SIZE 1500
+#define MAX_FRAME_SIZE 4096
 
 
 // Packet types
@@ -18,6 +18,8 @@ typedef struct {
     uint32_t src_ip;     // Sender's IP in network byte order
     uint16_t src_port;   // Sender's port
     uint16_t length;     // Payload length
+    uint16_t MAC;        // MAC address of the sender
+
 } packet_header_t;
 
 
